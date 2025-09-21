@@ -1,67 +1,33 @@
-name: CI Build & Push
+name: Simple Build
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-env:
-  IMAGE_NAME: demo-app
+    branches: [main]
 
 jobs:
-  build-test-push:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run smoke test locally (start app, test)
-        run: |
-          NODE_ENV=test PORT=3000 VERSION=ci npm start > app.log 2>&1 &
-          pid=$!
-          echo "Waiting for app to start..."
-          sleep 2
-          if curl --fail http://localhost:3000/ ; then
-            echo "App responded OK"
-          else
-            echo "App did not respond"
-            cat app.log || true
-            kill $pid || true
-            exit 1
-          fi
-          node test.js
-          kill $pid || true
-
-      - name: Set image tag
-        id: vars
-        run: |
-          echo "GIT_SHA=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build docker image
-        run: |
-          IMAGE_TAG=${{ steps.vars.outputs.GIT_SHA }}
-          IMAGE_FULL=wiryenkfea/${{ env.IMAGE_NAME }}:${IMAGE_TAG}
-          echo "IMAGE_FULL=${IMAGE_FULL}" >> $GITHUB_ENV
-          docker build -t ${IMAGE_FULL} .
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: wiryenkfea
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push image to Docker Hub
-        run: |
-          docker push $IMAGE_FULL
-
-      - name: Print image info
-        run: echo "Pushed image: $IMAGE_FULL"
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        
+    - run: npm ci
+    
+    - run: npm start &
+    
+    - run: sleep 5
+    
+    - run: curl http://localhost:3000/
+    
+    - run: pkill node || true
+    
+    - run: docker build -t wiryenkfea/demo-app:${GITHUB_SHA::7} .
+    
+    - run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u wiryenkfea --password-stdin
+    
+    - run: docker push wiryenkfea/demo-app:${GITHUB_SHA::7}
+    
+    - run: echo "Image tag for Harness:" ${GITHUB_SHA::7}
